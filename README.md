@@ -2,6 +2,11 @@
 
 **Senojian-Hyperdimensional Phase-Resonant Graph Attention Engine**
 
+[![CI Pipeline](https://github.com/tariqselassie-hub/shpr/actions/workflows/ci.yml/badge.svg)](https://github.com/tariqselassie-hub/shpr/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/shpr.svg)](https://crates.io/crates/shpr)
+[![Documentation](https://docs.rs/shpr/badge.svg)](https://docs.rs/shpr)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 A zero-dependency, ultra-lightweight, hardware-accelerated Vector Symbolic Architecture (VSA) and Hyperdimensional Computing (HDC) phase memory engine in Rust.
 
 `shpr` solves the $O(N^2)$ memory and computation bottleneck of Transformer Attention by projecting features onto continuous toroidal phase manifolds ($\mathbb{T}^D = S^1 \times \dots \times S^1$).
@@ -76,6 +81,16 @@ Run release benchmark:
 ```bash
 cargo run --release --bin shpr_demo
 ```
+
+---
+
+## 🤝 Community & Contributing
+
+We welcome community contributions, research proposals, SIMD optimizations, and new features!
+
+- **Discussion & Q&A:** Join the conversation on [GitHub Discussions](https://github.com/tariqselassie-hub/shpr/discussions) or open an issue.
+- **Contribution Guidelines:** See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, code formatting, and PR workflows.
+- **Code of Conduct:** We adhere to the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ---
 
