@@ -1,21 +1,26 @@
-//! Portable 4-Way Unrolled Scalar Fallback Engine for Continuous Phase Manifolds
+//! Portable 4-Way Unrolled Scalar Fallback Engine for Continuous Phase Manifolds.
 
 use std::f64::consts::PI;
 
+/// Default manifold dimension $D = 2048$.
 pub const MANIFOLD_DIM: usize = 2048;
 
+/// Portable unrolled scalar fallback phase vector.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScalarPhaseVector {
+    /// Vector of continuous phase angles in radians.
     pub angles: Vec<f64>,
 }
 
 impl ScalarPhaseVector {
+    /// Creates a zero-initialized scalar phase vector of dimension `dim`.
     pub fn new(dim: usize) -> Self {
         Self {
             angles: vec![0.0; dim],
         }
     }
 
+    /// Normalizes a phase angle to the principal interval $[-\pi, \pi]$.
     #[inline]
     pub fn normalize_angle(angle: f64) -> f64 {
         let mut a = (angle + PI) % (2.0 * PI);
@@ -25,6 +30,7 @@ impl ScalarPhaseVector {
         a - PI
     }
 
+    /// In-place 4-way loop unrolled scalar phase addition.
     pub fn add_phases_scalar(&mut self, rhs: &ScalarPhaseVector) {
         let dim = self.angles.len();
         let chunks = dim / 4;

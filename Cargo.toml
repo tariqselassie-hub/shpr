@@ -6,8 +6,11 @@ authors = ["GuddaLM Team <dev@guddalm.ai>"]
 description = "Senojian-Hyperdimensional Phase-Resonant Graph Attention Engine: O(1) constant memory attention with sub-20µs AVX2 hardware acceleration."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/tariqselassie-hub/shpr"
+homepage = "https://github.com/tariqselassie-hub/shpr"
+documentation = "https://docs.rs/shpr"
+readme = "README.md"
 keywords = ["vsa", "hdc", "hyperdimensional", "attention", "simd"]
-categories = ["science", "algorithms", "hardware-support"]
+categories = ["science", "algorithms", "hardware-support", "data-structures"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
@@ -17,3 +20,4 @@ default = ["avx2", "serde"]
 avx2 = []
 neon = []
 serde = ["dep:serde"]
+

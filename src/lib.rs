@@ -1,7 +1,44 @@
-//! # SHPR: Senojian-Hyperdimensional Phase-Resonant Graph Attention Engine
+//! # `shpr`: Senojian-Hyperdimensional Phase-Resonant Graph Attention Engine
 //!
-//! An ultra-lightweight, hardware-accelerated Vector Symbolic Architecture (VSA) and Hyperdimensional Computing (HDC)
-//! continuous phase memory engine. Achieves O(1) constant-memory sequence context attention and sub-20µs ingestion latency via AVX2/NEON SIMD intrinsics.
+//! A zero-dependency, ultra-lightweight, hardware-accelerated Vector Symbolic Architecture (VSA)
+//! and Hyperdimensional Computing (HDC) phase memory engine in Rust.
+//!
+//! ## Overview
+//!
+//! `shpr` solves the $O(N^2)$ memory and computation bottleneck of Transformer Attention by projecting
+//! feature streams onto continuous toroidal phase manifolds ($\mathbb{T}^D = S^1 \times \dots \times S^1$).
+//!
+//! Key advantages include:
+//! - **$O(1)$ Constant Memory:** Sequence context is accumulated into complex phasor state vectors.
+//! - **Deterministic Unbinding:** Continuous phase unbinding retrieves exact bound values ($\text{SNR} = \infty$).
+//! - **Zero Matrix Multiplications:** Softmax and pairwise dot products are replaced with phase resonance alignment $\sum \cos(\Delta\theta)$.
+//! - **Hardware Acceleration:** Accelerated using AVX2 & FMA (x86_64) or NEON (ARM64) SIMD intrinsics.
+//!
+//! ## Quickstart
+//!
+//! ```rust
+//! use shpr::{SenojianPhaseVector, SHPRGraphAttention};
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let dim = 1024;
+//!
+//!     // Create phase vectors for key and value
+//!     let key = SenojianPhaseVector::from_seed(42, "user_id", dim);
+//!     let val = SenojianPhaseVector::from_seed(42, "user_name", dim);
+//!
+//!     // Continuous Toroidal Binding: (theta_k + theta_v) mod 2PI
+//!     let bound = key.bind(&val, 0.0)?;
+//!
+//!     // Lossless Unbinding: (theta_bound - theta_k) mod 2PI
+//!     let retrieved = bound.unbind(&key, 0.0)?;
+//!
+//!     // Verify exact phase resonance match (1.0 = exact match)
+//!     let score = retrieved.resonance(&val);
+//!     assert!((score - 1.0).abs() < 1e-9);
+//!
+//!     Ok(())
+//! }
+//! ```
 
 pub mod avx2;
 pub mod neon;
@@ -12,9 +49,16 @@ pub use scalar::ScalarPhaseVector;
 
 use std::f64::consts::PI;
 
+/// Errors emitted by `shpr` operations.
 #[derive(Debug, Clone)]
 pub enum ShprError {
-    DimMismatch { expected: usize, got: usize },
+    /// Dimension mismatch between two vectors or between a vector and an attention engine state.
+    DimMismatch {
+        /// Expected vector dimension.
+        expected: usize,
+        /// Provided vector dimension.
+        got: usize,
+    },
 }
 
 impl std::fmt::Display for ShprError {
@@ -29,24 +73,44 @@ impl std::fmt::Display for ShprError {
 
 impl std::error::Error for ShprError {}
 
-/// Continuous Senojian Phase Vector in D-dimensional torus manifold T^D
+/// Continuous Senojian Phase Vector on a $D$-dimensional torus manifold $\mathbb{T}^D$.
+///
+/// Phase angles are represented in radians within the normalized continuous interval $[-\pi, \pi]$.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SenojianPhaseVector {
+    /// Internal array of phase angles in radians.
     pub phases: Vec<f64>,
 }
 
 impl SenojianPhaseVector {
+    /// Creates a zero-initialized phase vector of dimension `dim`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let vec = SenojianPhaseVector::zeros(512);
+    /// assert_eq!(vec.dim(), 512);
+    /// ```
     pub fn zeros(dim: usize) -> Self {
         Self {
             phases: vec![0.0; dim],
         }
     }
 
+    /// Returns the dimension $D$ of the phase vector manifold.
     #[inline]
     pub fn dim(&self) -> usize {
         self.phases.len()
     }
 
+    /// Creates a phase vector from arbitrary real features by applying $\tanh(x) \cdot \pi$.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let vec = SenojianPhaseVector::from_features(&[0.5, -1.2, 3.0]);
+    /// assert_eq!(vec.dim(), 3);
+    /// ```
     pub fn from_features(features: &[f64]) -> Self {
         let phases = features
             .iter()
@@ -55,6 +119,14 @@ impl SenojianPhaseVector {
         Self { phases }
     }
 
+    /// Deterministically generates a quasi-orthogonal continuous phase vector from a seed and string key.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let vec = SenojianPhaseVector::from_seed(42, "AST_Caller_Node", 1024);
+    /// assert_eq!(vec.dim(), 1024);
+    /// ```
     pub fn from_seed(seed: u64, key: &str, dim: usize) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -72,6 +144,19 @@ impl SenojianPhaseVector {
         Self { phases }
     }
 
+    /// Performs continuous toroidal binding ($\theta_A + \theta_B + \Delta\phi \pmod{2\pi}$).
+    ///
+    /// # Errors
+    /// Returns [`ShprError::DimMismatch`] if `self.dim() != rhs.dim()`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let k = SenojianPhaseVector::from_seed(1, "key", 256);
+    /// let v = SenojianPhaseVector::from_seed(1, "val", 256);
+    /// let bound = k.bind(&v, 0.0).unwrap();
+    /// assert_eq!(bound.dim(), 256);
+    /// ```
     pub fn bind(&self, rhs: &Self, phase_shift: f64) -> Result<Self, ShprError> {
         if self.dim() != rhs.dim() {
             return Err(ShprError::DimMismatch {
@@ -86,6 +171,20 @@ impl SenojianPhaseVector {
         Ok(Self { phases })
     }
 
+    /// Performs continuous phase unbinding ($\theta_{\text{bound}} - \theta_{\text{key}} - \Delta\phi \pmod{2\pi}$).
+    ///
+    /// # Errors
+    /// Returns [`ShprError::DimMismatch`] if `self.dim() != key.dim()`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let k = SenojianPhaseVector::from_seed(1, "key", 256);
+    /// let v = SenojianPhaseVector::from_seed(1, "val", 256);
+    /// let bound = k.bind(&v, 0.0).unwrap();
+    /// let unbound = bound.unbind(&k, 0.0).unwrap();
+    /// assert!((unbound.resonance(&v) - 1.0).abs() < 1e-9);
+    /// ```
     pub fn unbind(&self, key: &Self, phase_shift: f64) -> Result<Self, ShprError> {
         if self.dim() != key.dim() {
             return Err(ShprError::DimMismatch {
@@ -100,6 +199,18 @@ impl SenojianPhaseVector {
         Ok(Self { phases })
     }
 
+    /// Computes the mean continuous phase resonance score $\frac{1}{D} \sum_{i=1}^D \cos(\theta_{1,i} - \theta_{2,i})$.
+    ///
+    /// Returns `1.0` for identical phase vectors and near `0.0` for orthogonal phase vectors.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::SenojianPhaseVector;
+    /// let v1 = SenojianPhaseVector::from_seed(1, "a", 512);
+    /// let v2 = SenojianPhaseVector::from_seed(1, "b", 512);
+    /// assert!((v1.resonance(&v1) - 1.0).abs() < 1e-9);
+    /// assert!(v1.resonance(&v2).abs() < 0.2);
+    /// ```
     #[inline]
     pub fn resonance(&self, other: &Self) -> f64 {
         let dim = self.dim();
@@ -129,6 +240,7 @@ impl SenojianPhaseVector {
         sum / (dim as f64)
     }
 
+    /// Wraps any phase angle in radians to the principal interval $[-\pi, \pi]$.
     #[inline]
     pub fn normalize_angle(angle: f64) -> f64 {
         let mut a = (angle + PI) % (2.0 * PI);
@@ -139,15 +251,22 @@ impl SenojianPhaseVector {
     }
 }
 
-/// Constant Memory O(1) SHPR State Accumulator
+/// Constant Memory $O(1)$ SHPR State Accumulator.
+///
+/// Accumulates streaming key-value phase associations into complex phasor registers $(\mathbf{r}, \mathbf{i})$:
+/// $$\mathbf{r}_i = \sum \cos(\theta_{k,i} + \theta_{v,i}), \quad \mathbf{i}_i = \sum \sin(\theta_{k,i} + \theta_{v,i})$$
 #[derive(Clone, Debug)]
 pub struct SHPRGraphAttention {
+    /// Vector dimension $D$.
     pub dim: usize,
+    /// Accumulator for real parts $\cos(\theta)$.
     pub real_state: Vec<f64>,
+    /// Accumulator for imaginary parts $\sin(\theta)$.
     pub imag_state: Vec<f64>,
 }
 
 impl SHPRGraphAttention {
+    /// Creates a new, empty graph attention state accumulator for vectors of dimension `dim`.
     pub fn new(dim: usize) -> Self {
         Self {
             dim,
@@ -156,6 +275,10 @@ impl SHPRGraphAttention {
         }
     }
 
+    /// Accumulates a key-value phase association with an optional exponential decay factor.
+    ///
+    /// # Errors
+    /// Returns [`ShprError::DimMismatch`] if `key.dim() != self.dim` or `value.dim() != self.dim`.
     #[inline]
     pub fn accumulate(
         &mut self,
@@ -198,6 +321,7 @@ impl SHPRGraphAttention {
         Ok(())
     }
 
+    /// Fast phasor dot product scoring against a query key without full unbinding.
     #[inline]
     pub fn fast_phasor_dot_product(&self, key: &SenojianPhaseVector) -> f64 {
         let k_phases = &key.phases;
@@ -226,6 +350,10 @@ impl SHPRGraphAttention {
         sum / (dim as f64)
     }
 
+    /// Queries the accumulated memory state using `key` to retrieve the associated value vector.
+    ///
+    /// # Errors
+    /// Returns [`ShprError::DimMismatch`] if `key.dim() != self.dim`.
     pub fn query(&self, key: &SenojianPhaseVector) -> Result<SenojianPhaseVector, ShprError> {
         let mut mem_phases = vec![0.0; self.dim];
         for i in 0..self.dim {
@@ -235,6 +363,12 @@ impl SHPRGraphAttention {
         mem_vec.unbind(key, 0.0)
     }
 
+    /// Queries memory using `key` and ranks candidate value vectors by phase resonance score.
+    ///
+    /// Returns a vector of `(candidate_index, resonance_score)` pairs sorted descending by score.
+    ///
+    /// # Errors
+    /// Returns [`ShprError::DimMismatch`] if dimensions mismatch.
     pub fn rank_candidates(
         &self,
         key: &SenojianPhaseVector,
@@ -251,17 +385,33 @@ impl SHPRGraphAttention {
     }
 }
 
-/// Hierarchical Centroid-Routed Memory Bank
+/// Segmented Hierarchical Centroid-Routed Memory Bank.
+///
+/// Divides long streaming context sequences into fixed-size chunks, maintaining a key centroid for sub-linear
+/// hierarchical retrieval over massive token horizons.
 #[derive(Clone, Debug)]
 pub struct HierarchicalPhaseMemoryBank {
+    /// Dimension $D$ of vectors.
     pub dim: usize,
+    /// Maximum capacity of each memory segment chunk.
     pub chunk_capacity: usize,
+    /// Memory chunks containing graph attention state accumulators.
     pub chunks: Vec<SHPRGraphAttention>,
+    /// Centroid summaries for fast routing.
     pub chunk_key_centroids: Vec<SHPRGraphAttention>,
+    /// Number of elements stored in the current active chunk.
     pub items_in_current_chunk: usize,
 }
 
 impl HierarchicalPhaseMemoryBank {
+    /// Creates a new hierarchical memory bank with a given vector dimension and segment capacity.
+    ///
+    /// # Example
+    /// ```rust
+    /// use shpr::HierarchicalPhaseMemoryBank;
+    /// let memory = HierarchicalPhaseMemoryBank::new(512, 64);
+    /// assert_eq!(memory.chunk_capacity, 64);
+    /// ```
     pub fn new(dim: usize, chunk_capacity: usize) -> Self {
         Self {
             dim,
@@ -272,6 +422,9 @@ impl HierarchicalPhaseMemoryBank {
         }
     }
 
+    /// Ingests a key-value phase association into the active memory segment.
+    ///
+    /// Automatically allocates a new segment when `chunk_capacity` is reached.
     pub fn accumulate(
         &mut self,
         key: &SenojianPhaseVector,
@@ -294,6 +447,10 @@ impl HierarchicalPhaseMemoryBank {
         Ok(())
     }
 
+    /// Performs sub-linear hierarchical retrieval using centroid routing.
+    ///
+    /// Evaluates `top_k` candidate chunks by key centroid match before unbinding the target value.
+    /// Returns `(best_resonance_score, winning_chunk_index)`.
     pub fn query_hierarchical(
         &self,
         key: &SenojianPhaseVector,

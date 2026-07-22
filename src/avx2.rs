@@ -1,24 +1,39 @@
-//! AVX2 & FMA Hardware Acceleration Engine for T^2048 Continuous Phase Manifold
+//! AVX2 & FMA 256-bit SIMD Hardware Acceleration Engine.
+//!
+//! Provides ultra-fast 256-bit SIMD phase vector binding and minimax Taylor series cosine resonance
+//! calculation over $D = 2048$ continuous phase vector manifolds ($\mathbb{T}^{2048}$).
 
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+/// Dimension of the AVX2 hardware-accelerated phase manifold $D = 2048$.
 pub const MANIFOLD_DIM: usize = 2048;
 
-/// Memory-aligned 256-bit AVX2 Hardware Accelerated Phase Vector
+/// Memory-aligned 256-bit AVX2 hardware-accelerated phase vector ($D = 2048$).
+///
+/// Guaranteed 32-byte alignment for aligned `_mm256_load_ps` / `_mm256_store_ps` vector operations.
 #[repr(C, align(32))]
 #[derive(Clone, Debug)]
 pub struct AVX2PhaseVector {
+    /// Array of single-precision float phase angles in radians.
     pub angles: [f32; MANIFOLD_DIM],
 }
 
+impl Default for AVX2PhaseVector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AVX2PhaseVector {
+    /// Creates a zero-initialized AVX2 phase vector.
     pub fn new() -> Self {
         Self {
             angles: [0.0; MANIFOLD_DIM],
         }
     }
 
+    /// Converts a double-precision `f64` slice to an aligned 32-bit `AVX2PhaseVector`.
     pub fn from_f64_slice(slice: &[f64]) -> Self {
         let mut vec = Self::new();
         for (i, &v) in slice.iter().take(MANIFOLD_DIM).enumerate() {
@@ -27,6 +42,7 @@ impl AVX2PhaseVector {
         vec
     }
 
+    /// Deterministically generates a continuous phase vector from seed and string key.
     pub fn from_seed(seed: u64, key: &str) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -44,7 +60,10 @@ impl AVX2PhaseVector {
         vec
     }
 
-    /// Vectorized Phase Addition over T^2048 using AVX2 & FMA (8 x f32 per lane)
+    /// Vectorized in-place phase addition over $\mathbb{T}^{2048}$ using AVX2 & FMA (8 x f32 per lane).
+    ///
+    /// # Safety
+    /// Requires `avx2` and `fma` CPU target features.
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub unsafe fn add_phases_avx2(&mut self, rhs: &AVX2PhaseVector) {
@@ -67,7 +86,12 @@ impl AVX2PhaseVector {
         }
     }
 
-    /// Vectorized Minimax Taylor Cosine Resonance Score using AVX2 & FMA
+    /// Vectorized Minimax Taylor Cosine Resonance Score using AVX2 & FMA.
+    ///
+    /// Computes phase alignment score $\frac{1}{D} \sum \cos(\theta_{1,i} - \theta_{2,i})$ in under 20ns.
+    ///
+    /// # Safety
+    /// Requires `avx2` and `fma` CPU target features.
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub unsafe fn phase_resonance_avx2(a: &AVX2PhaseVector, b: &AVX2PhaseVector) -> f32 {

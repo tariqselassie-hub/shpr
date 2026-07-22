@@ -1,25 +1,39 @@
-//! ARM64 NEON Hardware Acceleration Engine for T^2048 Continuous Phase Manifold
+//! ARM64 NEON Hardware Acceleration Engine for T^2048 Continuous Phase Manifold.
 
 #[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
 
+/// Dimension of the NEON hardware-accelerated phase manifold $D = 2048$.
 pub const MANIFOLD_DIM: usize = 2048;
 
-/// Memory-aligned 128-bit ARM NEON Phase Vector
+/// Memory-aligned 128-bit ARM NEON Phase Vector ($D = 2048$).
+///
+/// Guaranteed 16-byte alignment for aligned `vld1q_f32` / `vst1q_f32` vector operations.
 #[repr(C, align(16))]
 #[derive(Clone, Debug)]
 pub struct NEONPhaseVector {
+    /// Array of single-precision float phase angles in radians.
     pub angles: [f32; MANIFOLD_DIM],
 }
 
+impl Default for NEONPhaseVector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NEONPhaseVector {
+    /// Creates a zero-initialized NEON phase vector.
     pub fn new() -> Self {
         Self {
             angles: [0.0; MANIFOLD_DIM],
         }
     }
 
-    /// Vectorized Phase Addition over T^2048 using ARM NEON (4 x f32 per lane)
+    /// Vectorized Phase Addition over $\mathbb{T}^{2048}$ using ARM NEON (4 x f32 per lane).
+    ///
+    /// # Safety
+    /// Requires `aarch64` target architecture with NEON support.
     #[cfg(target_arch = "aarch64")]
     pub unsafe fn add_phases_neon(&mut self, rhs: &NEONPhaseVector) {
         let two_pi = vdupq_n_f32(std::f32::consts::TAU);
