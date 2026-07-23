@@ -25,9 +25,18 @@ fn main() {
         let elapsed = start.elapsed();
         let us_per_token = (elapsed.as_secs_f64() * 1_000_000.0) / (iterations as f64);
 
-        println!("    Total Time for 10,000 Phase Addition Passes : {:?}", elapsed);
-        println!("    ⚡ AVX2 Hardware Ingestion Latency          : {:.2} µs / token", us_per_token);
-        println!("    🔥 Ingestion Throughput                      : {:.2} Million tokens / sec / core", 1.0 / us_per_token);
+        println!(
+            "    Total Time for 10,000 Phase Addition Passes : {:?}",
+            elapsed
+        );
+        println!(
+            "    ⚡ AVX2 Hardware Ingestion Latency          : {:.2} µs / token",
+            us_per_token
+        );
+        println!(
+            "    🔥 Ingestion Throughput                      : {:.2} Million tokens / sec / core",
+            1.0 / us_per_token
+        );
 
         let start_res = Instant::now();
         let mut res_sum = 0.0;
@@ -37,18 +46,33 @@ fn main() {
             }
         }
         let res_elapsed = start_res.elapsed();
-        println!("    ⚡ Vectorized Taylor Cosine Resonance       : {:.2} µs / op", (res_elapsed.as_secs_f64() * 1_000_000.0) / (iterations as f64));
-        println!("    Resonance Alignment Score                   : {:.4}", res_sum / (iterations as f32));
+        println!(
+            "    ⚡ Vectorized Taylor Cosine Resonance       : {:.2} µs / op",
+            (res_elapsed.as_secs_f64() * 1_000_000.0) / (iterations as f64)
+        );
+        println!(
+            "    Resonance Alignment Score                   : {:.4}",
+            res_sum / (iterations as f32)
+        );
     }
 
     println!("\n[2] HIERARCHICAL CENTROID-ROUTED MEMORY RECALL (10,000 TOKENS)");
     let mut bank = HierarchicalPhaseMemoryBank::new(dim, 64);
-    let (k, v) = (SenojianPhaseVector::from_seed(100, "key_100", dim), SenojianPhaseVector::from_seed(100, "val_100", dim));
+    let (k, v) = (
+        SenojianPhaseVector::from_seed(100, "key_100", dim),
+        SenojianPhaseVector::from_seed(100, "val_100", dim),
+    );
     bank.accumulate(&k, &v, 1.0).unwrap();
 
     let (res, win_chunk) = bank.query_hierarchical(&k, &v, 2).unwrap();
-    println!("    Retrieved Token #100 Resonance Alignment : {:.4} (Target Match 🎯)", res);
-    println!("    Winning Centroid Chunk Index             : Chunk #{}", win_chunk);
+    println!(
+        "    Retrieved Token #100 Resonance Alignment : {:.4} (Target Match 🎯)",
+        res
+    );
+    println!(
+        "    Winning Centroid Chunk Index             : Chunk #{}",
+        win_chunk
+    );
 
     println!("\n==========================================================================");
     println!("  ✅ Standalone shpr crate successfully executed.");

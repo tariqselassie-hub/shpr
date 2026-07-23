@@ -49,6 +49,10 @@ pub use scalar::ScalarPhaseVector;
 
 use std::f64::consts::PI;
 
+mod phase_math;
+
+use phase_math::{mix_str_key_into_state, next_splitmix64, normalize_angle};
+
 /// Errors emitted by `shpr` operations.
 #[derive(Debug, Clone)]
 pub enum ShprError {
@@ -112,32 +116,16 @@ impl SenojianPhaseVector {
     /// assert_eq!(vec.dim(), 3);
     /// ```
     pub fn from_features(features: &[f64]) -> Self {
-        let phases = features
-            .iter()
-            .map(|&x| x.tanh() * PI)
-            .collect();
+        let phases = features.iter().map(|&x| x.tanh() * PI).collect();
         Self { phases }
     }
 
     /// Deterministically generates a quasi-orthogonal continuous phase vector from a seed and string key.
-    ///
-    /// # Example
-    /// ```rust
-    /// use shpr::SenojianPhaseVector;
-    /// let vec = SenojianPhaseVector::from_seed(42, "AST_Caller_Node", 1024);
-    /// assert_eq!(vec.dim(), 1024);
-    /// ```
     pub fn from_seed(seed: u64, key: &str, dim: usize) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
+        let mut state = mix_str_key_into_state(seed, key);
         let mut phases = Vec::with_capacity(dim);
-        for i in 0..dim {
-            let mut hasher = DefaultHasher::new();
-            seed.hash(&mut hasher);
-            key.hash(&mut hasher);
-            i.hash(&mut hasher);
-            let h = hasher.finish();
+        for _ in 0..dim {
+            let h = next_splitmix64(&mut state);
             let norm = (h as f64) / (u64::MAX as f64);
             phases.push(norm * 2.0 * PI - PI);
         }
@@ -166,7 +154,7 @@ impl SenojianPhaseVector {
         }
         let mut phases = vec![0.0; self.dim()];
         for i in 0..self.dim() {
-            phases[i] = Self::normalize_angle(self.phases[i] + rhs.phases[i] + phase_shift);
+            phases[i] = normalize_angle(self.phases[i] + rhs.phases[i] + phase_shift);
         }
         Ok(Self { phases })
     }
@@ -194,7 +182,7 @@ impl SenojianPhaseVector {
         }
         let mut phases = vec![0.0; self.dim()];
         for i in 0..self.dim() {
-            phases[i] = Self::normalize_angle(self.phases[i] - key.phases[i] - phase_shift);
+            phases[i] = normalize_angle(self.phases[i] - key.phases[i] - phase_shift);
         }
         Ok(Self { phases })
     }
@@ -243,11 +231,7 @@ impl SenojianPhaseVector {
     /// Wraps any phase angle in radians to the principal interval $[-\pi, \pi]$.
     #[inline]
     pub fn normalize_angle(angle: f64) -> f64 {
-        let mut a = (angle + PI) % (2.0 * PI);
-        if a < 0.0 {
-            a += 2.0 * PI;
-        }
-        a - PI
+        crate::phase_math::normalize_angle(angle)
     }
 }
 
@@ -357,7 +341,7 @@ impl SHPRGraphAttention {
     pub fn query(&self, key: &SenojianPhaseVector) -> Result<SenojianPhaseVector, ShprError> {
         let mut mem_phases = vec![0.0; self.dim];
         for i in 0..self.dim {
-            mem_phases[i] = SenojianPhaseVector::normalize_angle(self.imag_state[i].atan2(self.real_state[i]));
+            mem_phases[i] = normalize_angle(self.imag_state[i].atan2(self.real_state[i]));
         }
         let mem_vec = SenojianPhaseVector { phases: mem_phases };
         mem_vec.unbind(key, 0.0)
@@ -433,7 +417,8 @@ impl HierarchicalPhaseMemoryBank {
     ) -> Result<(), ShprError> {
         if self.items_in_current_chunk >= self.chunk_capacity {
             self.chunks.push(SHPRGraphAttention::new(self.dim));
-            self.chunk_key_centroids.push(SHPRGraphAttention::new(self.dim));
+            self.chunk_key_centroids
+                .push(SHPRGraphAttention::new(self.dim));
             self.items_in_current_chunk = 0;
         }
 

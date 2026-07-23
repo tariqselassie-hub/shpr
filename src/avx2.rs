@@ -44,18 +44,15 @@ impl AVX2PhaseVector {
 
     /// Deterministically generates a continuous phase vector from seed and string key.
     pub fn from_seed(seed: u64, key: &str) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use crate::phase_math::{mix_str_key_into_state, next_splitmix64};
+        use std::f32::consts::PI;
 
+        let mut state = mix_str_key_into_state(seed, key);
         let mut vec = Self::new();
         for i in 0..MANIFOLD_DIM {
-            let mut hasher = DefaultHasher::new();
-            seed.hash(&mut hasher);
-            key.hash(&mut hasher);
-            i.hash(&mut hasher);
-            let h = hasher.finish();
+            let h = next_splitmix64(&mut state);
             let norm = (h as f32) / (u64::MAX as f32);
-            vec.angles[i] = norm * 2.0 * std::f32::consts::PI - std::f32::consts::PI;
+            vec.angles[i] = norm * 2.0 * PI - PI;
         }
         vec
     }
@@ -88,13 +85,13 @@ impl AVX2PhaseVector {
 
     /// Vectorized Minimax Taylor Cosine Resonance Score using AVX2 & FMA.
     ///
-    /// Computes phase alignment score $\frac{1}{D} \sum \cos(\theta_{1,i} - \theta_{2,i})$ in under 20ns.
+    /// Computes mean phase alignment score $\frac{1}{D} \sum \cos(\theta_{1,i} - \theta_{2,i})$.
     ///
     /// # Safety
     /// Requires `avx2` and `fma` CPU target features.
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "avx2", enable = "fma")]
-    pub unsafe fn phase_resonance_avx2(a: &AVX2PhaseVector, b: &AVX2PhaseVector) -> f32 {
+    pub unsafe fn phase_resonance_avx2(a: &Self, b: &Self) -> f32 {
         let mut acc = _mm256_setzero_ps();
 
         let two_pi = _mm256_set1_ps(std::f32::consts::TAU);

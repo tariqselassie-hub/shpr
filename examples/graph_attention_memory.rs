@@ -18,7 +18,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut memory = HierarchicalPhaseMemoryBank::new(dim, chunk_capacity);
 
     let num_tokens = 128;
-    println!("📥 Ingesting {} streaming key-value token associations...", num_tokens);
+    println!(
+        "📥 Ingesting {} streaming key-value token associations...",
+        num_tokens
+    );
 
     let target_token_idx = 75;
     let mut target_key = SenojianPhaseVector::zeros(dim);
@@ -48,8 +51,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Winning Segment Chunk Index  : {}", winning_chunk);
     println!("  Hierarchical Resonance Score : {:.4}", score);
 
-    assert_eq!(winning_chunk, 2, "Centroid routing must accurately identify target chunk #2");
-    assert!(score > 0.10, "Target score must stand out significantly above orthogonal noise");
+    assert_eq!(
+        winning_chunk, 2,
+        "Centroid routing must accurately identify target chunk #2"
+    );
+    assert!(
+        score > 0.10,
+        "Target score must stand out significantly above orthogonal noise"
+    );
     println!("\n✅ Successfully routed to target segment chunk and retrieved token value!");
 
     Ok(())

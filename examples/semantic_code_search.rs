@@ -35,20 +35,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("  Target Symbol Query: 'AST_Role_Callee'");
     println!("  Retrieved Match     : 'fn_avx2_phase_resonance'");
-    println!("  Resonance Score (Target Match)   : {:.4}", resonance_callee);
-    println!("  Resonance Score (Other AST Role)  : {:.4}", resonance_caller);
-    println!("  Resonance Score (Random Noise)    : {:.4}", resonance_random);
+    println!(
+        "  Resonance Score (Target Match)   : {:.4}",
+        resonance_callee
+    );
+    println!(
+        "  Resonance Score (Other AST Role)  : {:.4}",
+        resonance_caller
+    );
+    println!(
+        "  Resonance Score (Random Noise)    : {:.4}",
+        resonance_random
+    );
 
     // 5. Rank candidates automatically
     let candidates = vec![caller_val.clone(), callee_val.clone()];
     let ranked = ast_attention.rank_candidates(&callee_key, &candidates)?;
     println!("\n  Ranked Candidates for 'AST_Role_Callee':");
     for (rank, (idx, score)) in ranked.iter().enumerate() {
-        let name = if *idx == 1 { "fn_avx2_phase_resonance" } else { "fn_compute_attention" };
+        let name = if *idx == 1 {
+            "fn_avx2_phase_resonance"
+        } else {
+            "fn_compute_attention"
+        };
         println!("    #{}: {} (Score: {:.4})", rank + 1, name, score);
     }
 
-    assert_eq!(ranked[0].0, 1, "Top ranked candidate should be fn_avx2_phase_resonance");
+    assert_eq!(
+        ranked[0].0, 1,
+        "Top ranked candidate should be fn_avx2_phase_resonance"
+    );
     assert!(resonance_callee > 0.50);
     println!("\n✅ Successfully retrieved bound AST symbol from graph attention memory!");
 
