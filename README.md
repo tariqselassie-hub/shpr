@@ -13,16 +13,24 @@ A zero-dependency, ultra-lightweight, hardware-accelerated Vector Symbolic Archi
 
 ---
 
-## ⚡ Performance Highlights
+|
 
-- **Over 9 Million Tokens / Second / CPU Core:** Ingestion latency of **$0.11\,\mu\text{s}$ (110 nanoseconds)** per token update using 256-bit AVX2 & FMA intrinsics.
-- **$3.1\%$ Memory Footprint:** Processes $10,000$ tokens in **$4.91\text{ MB}$** RAM vs **$156.25\text{ MB}$** required by standard Transformer KV caches.
-- **Deterministic Unbinding:** Continuous phase unbinding achieves exact symbolic retrieval with $\text{SNR} = \infty$.
-- **Zero Softmax / Matrix Multiplication:** Replaces pairwise matrix multiplications with phase resonance alignment $\sum \cos(\Delta\theta)$.
+| ## ⚡ Performance Highlights
 
----
+| Measured on x86_64 with AVX2 + FMA enabled:
 
-## 📦 Quickstart (Rust)
+| - **AVX2 Phase Addition:** ~**4.3 µs / token** for 10,000 phase additions on `T^2048`
+| - **AVX2 Resonance Scoring:** ~**6.7 µs / op** for 10,000 cosine-resonance evaluations
+| - **Deterministic Unbinding:** Continuous phase unbinding achieves exact symbolic retrieval with `SNR = ∞`
+| - **Zero Softmax / Matrix Multiplication:** Replaces pairwise matrix multiplies with phase resonance alignment `∑ cos(Δθ)`
+
+|
+
+|---
+
+|
+
+| ## 📦 Quickstart (Rust)
 
 Add `shpr` to your `Cargo.toml`:
 
